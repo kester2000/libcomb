@@ -1,2 +1,7 @@
 .vscode/*
+.clang-format
+
 *.so
+
+main
+*.exe

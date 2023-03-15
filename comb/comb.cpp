@@ -171,7 +171,7 @@ typedef struct __CombContext {
     LimitContainer lc;
 } CombContext;
 
-void getCardList(int cardList[20][3], char *seedChar)
+void getCardList(int cardList[20][3], const char *seedChar)
 {
     std::string seedName(seedChar);
     int id[56];
@@ -287,8 +287,9 @@ void setZero(int cardList[20][3], int perm[20])
 {
     int k = -1;
     for (int i = 0; i < 20; i++) {
-        if (perm[20] == -1) {
-            if (cardList[k][0] + cardList[k][1] + cardList[k][2] < cardList[i][0] + cardList[i][1] + cardList[i][2]) {
+        if (perm[i] == -1) {
+            if (k == -1 ||
+                cardList[k][0] + cardList[k][1] + cardList[k][2] < cardList[i][0] + cardList[i][1] + cardList[i][2]) {
                 k = i;
             }
         }
@@ -344,8 +345,10 @@ void getMaxByLimit(CombContext *ctx, int limit[15], int nxt)
     }
     if (flag) {
         CWriteLock _l(ctx->scoreMtx);
-        ctx->maxScore = score;
-        memcpy(ctx->perm, perm, 20 * sizeof(int));
+        if (ctx->maxScore < score) {
+            ctx->maxScore = score;
+            memcpy(ctx->perm, perm, 20 * sizeof(int));
+        }
     }
     if (nxt < 15) {
         for (int i = 0; i < 4; i++) {
@@ -360,10 +363,6 @@ void *getMaxScoreThread(void *args)
     CombContext *ctx = (CombContext *)args;
     int limit[15] = {0};
     while (ctx->lc.getNext(limit)) {
-        if (limit[0] == 4 && limit[1] == 8 && limit[2] == 8 && limit[3] == 3 && limit[4] == 4) {
-            limit[0] += 1;
-            limit[0] -= 1;
-        }
         getMaxByLimit(ctx, limit, 5);
         memset(limit, 0, sizeof(limit));
     }
@@ -376,12 +375,16 @@ int getMaxScore(int cardList[20][3], int perm[20], int initScore, int threadCnt)
     context.cardList = cardList;
     context.perm = perm;
     context.maxScore = initScore;
-    std::vector<std::thread> threads;
-    for (int i = 0; i < threadCnt; i++) {
-        threads.emplace_back(std::thread(getMaxScoreThread, &context));
-    }
-    for (int i = 0; i < threadCnt; i++) {
-        threads[i].join();
+    if (threadCnt == 1) {
+        getMaxScoreThread(&context);
+    } else {
+        std::vector<std::thread> threads;
+        for (int i = 0; i < threadCnt; i++) {
+            threads.emplace_back(std::thread(getMaxScoreThread, &context));
+        }
+        for (int i = 0; i < threadCnt; i++) {
+            threads[i].join();
+        }
     }
     return context.maxScore;
 }
