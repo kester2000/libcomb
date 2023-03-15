@@ -44,7 +44,7 @@ static const int LINES[3][5][5] = {
     },
 };
 
-static const int limit[544][5] = {
+static const int allLimit[544][5] = {
     {8, 8, 8, 8, 8}, {8, 8, 8, 8, 4}, {8, 8, 8, 8, 3}, {8, 8, 8, 8, 0}, {8, 8, 8, 4, 8}, {8, 8, 8, 4, 4},
     {8, 8, 8, 4, 3}, {8, 8, 8, 4, 0}, {8, 8, 8, 3, 8}, {8, 8, 8, 3, 4}, {8, 8, 8, 3, 3}, {8, 8, 8, 3, 0},
     {8, 8, 8, 0, 8}, {8, 8, 8, 0, 4}, {8, 8, 8, 0, 3}, {8, 8, 8, 0, 0}, {8, 8, 4, 8, 8}, {8, 8, 4, 8, 4},
@@ -138,37 +138,13 @@ static const int limit[544][5] = {
     {0, 0, 8, 0, 0}, {0, 0, 4, 0, 0}, {0, 0, 3, 0, 0}, {0, 0, 0, 0, 0},
 };
 
-class LimitContainer {
-public:
-    LimitContainer() : cursor(0) {}
-
-    bool getNext(int *dest)
-    {
-        std::lock_guard<std::mutex> _l(mtx);
-        if (cursor >= 544) {
-            return false;
-        }
-        memcpy(dest, limit[cursor++], 5 * sizeof(int));
-        return true;
-    }
-
-    void clear()
-    {
-        std::lock_guard<std::mutex> _l(mtx);
-        cursor = 0;
-    }
-
-private:
-    int cursor;
-    std::mutex mtx;
-};
-
 typedef struct __CombContext {
     int (*cardList)[3];
     int *perm;
     int maxScore;
     CRWMtx scoreMtx;
-    LimitContainer lc;
+    int cursor;
+    std::mutex cursorMtx;
 } CombContext;
 
 void getCardList(int cardList[20][3], const char *seedChar)
@@ -362,7 +338,14 @@ void *getMaxScoreThread(void *args)
 {
     CombContext *ctx = (CombContext *)args;
     int limit[15] = {0};
-    while (ctx->lc.getNext(limit)) {
+    while (true) {
+        {
+            std::lock_guard<std::mutex> _l(ctx->cursorMtx);
+            if (ctx->cursor >= 544) {
+                break;
+            }
+            memcpy(limit, allLimit[ctx->cursor++], 5 * sizeof(int));
+        }
         getMaxByLimit(ctx, limit, 5);
         memset(limit, 0, sizeof(limit));
     }
@@ -375,6 +358,7 @@ int getMaxScore(int cardList[20][3], int perm[20], int initScore, int threadCnt)
     context.cardList = cardList;
     context.perm = perm;
     context.maxScore = initScore;
+    context.cursor = 0;
     if (threadCnt == 1) {
         getMaxScoreThread(&context);
     } else {
