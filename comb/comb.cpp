@@ -1,6 +1,7 @@
 #include "comb.h"
 
 #include <algorithm>
+#include <cstring>
 #include <random>
 
 #include "rwlock.h"
@@ -95,4 +96,13 @@ int getScore(int cardList[20][3])
         score += cardList[0][i];
     }
     return score;
+}
+
+int getScoreByPerm(int cardList[20][3], int perm[20])
+{
+    int board[20][3];
+    for (int i = 0; i < 20; i++) {
+        memcpy(board[perm[i]], cardList[i], 3 * sizeof(int));
+    }
+    return getScore(board);
 }
