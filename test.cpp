@@ -6,7 +6,7 @@ using namespace std;
 
 int main(int argc, char* argv[])
 {
-    char* seed = "宽容";
+    const char* seed = "宽容";
     int threadCnt = 1;
     int cardList[20][3], perm[20];
     if (argc >= 2) {
