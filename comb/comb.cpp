@@ -1,6 +1,7 @@
 #include "comb.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <random>
 #include <thread>
@@ -138,8 +139,10 @@ static const int allLimit[544][5] = {
     {0, 0, 8, 0, 0}, {0, 0, 4, 0, 0}, {0, 0, 3, 0, 0}, {0, 0, 0, 0, 0},
 };
 
+static const double VARS[11] = {1.00, 0.721, 0.3993, 0.1947, 0.069, 0.0312, 0.75, 0.03, 0.08465, 0.08164, 18};
+
 typedef struct __CombContext {
-    int (*cardList)[3];
+    const int (*cardList)[3];
     int *perm;
     int maxScore;
     CRWMtx scoreMtx;
@@ -176,7 +179,7 @@ void getCardList(int cardList[20][3], const char *seedChar)
     }
 }
 
-int getScore(int cardList[20][3])
+int getScore(const int cardList[20][3])
 {
     int score = 0;
     for (int i = 0; i < 3; i++) {
@@ -203,7 +206,7 @@ int getScore(int cardList[20][3])
     return score;
 }
 
-int getScoreByPerm(int cardList[20][3], int perm[20])
+int getScoreByPerm(const int cardList[20][3], int perm[20])
 {
     int board[20][3];
     for (int i = 0; i < 20; i++) {
@@ -212,7 +215,7 @@ int getScoreByPerm(int cardList[20][3], int perm[20])
     return getScore(board);
 }
 
-int getPossibleScore(int limit[15], int nxt)
+static int getPossibleScore(const int limit[15], int nxt)
 {
     int score = 0;
     for (int i = 0; i < 15; i++) {
@@ -229,7 +232,7 @@ int getPossibleScore(int limit[15], int nxt)
     return score;
 }
 
-bool setCard(int cardList[20][3], int perm[20], int id, int val)
+static bool setCard(const int cardList[20][3], int perm[20], int id, int val)
 {
     int k = -1;
     for (int i = 0; i < 20; i++) {
@@ -259,7 +262,7 @@ bool setCard(int cardList[20][3], int perm[20], int id, int val)
     return true;
 }
 
-void setZero(int cardList[20][3], int perm[20])
+static void setZero(const int cardList[20][3], int perm[20])
 {
     int k = -1;
     for (int i = 0; i < 20; i++) {
@@ -273,7 +276,7 @@ void setZero(int cardList[20][3], int perm[20])
     perm[k] = 0;
 }
 
-void getMaxByLimit(CombContext *ctx, int limit[15], int nxt)
+static void getMaxByLimit(CombContext *ctx, int limit[15], int nxt)
 {
     int possibleScore = getPossibleScore(limit, nxt);
     {
@@ -334,7 +337,7 @@ void getMaxByLimit(CombContext *ctx, int limit[15], int nxt)
     }
 }
 
-void *getMaxScoreThread(void *args)
+static void *getMaxScoreThread(void *args)
 {
     CombContext *ctx = (CombContext *)args;
     int limit[15] = {0};
@@ -352,7 +355,7 @@ void *getMaxScoreThread(void *args)
     return NULL;
 }
 
-int getMaxScore(int cardList[20][3], int perm[20], int initScore, int threadCnt)
+int getMaxScore(const int cardList[20][3], int perm[20], int initScore, int threadCnt)
 {
     CombContext context;
     context.cardList = cardList;
@@ -371,4 +374,325 @@ int getMaxScore(int cardList[20][3], int perm[20], int initScore, int threadCnt)
         }
     }
     return context.maxScore;
+}
+
+enum Status {
+    EMPTY,
+    PARTIAL,
+    FULL,
+    BROKEN,
+};
+
+double getExpScore(const int cardList[20][3], const double *vars)
+{
+    if (!vars) {
+        vars = VARS;
+    }
+    double ret = 0, waiting[10] = {0}, decide[20][2] = {0};
+    int blockCount = 0, lastNum = 0, lastScore = 0, desired[10] = {0}, needs[10] = {0};
+    Status status;
+    int length, score, num, filled;
+    double scale, times;
+
+    for (int i = 0; i < 20; i++)
+        if (cardList[i][0]) blockCount++;
+
+    if (cardList[0][0] == 0) {
+        ret += vars[10];
+    } else {
+        ret += cardList[0][0] + cardList[0][1] + cardList[0][2];
+    }
+
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 5; j++) {
+            length = 5 - abs(j - 2);
+            score = 0;
+            num = 0;
+            filled = 0;
+
+            bool flag = true;
+            for (int k = 0; k < length && flag; k++) {
+                int now = cardList[LINES[i][j][k]][i];
+                if (now != 0) filled++;
+                if (now != 0 && now != 10) {
+                    if (num != 0 && num != now) {
+                        status = BROKEN;
+                        score = 0;
+                        flag = false;
+                    } else {
+                        num = now;
+                    }
+                }
+            }
+            if (flag) {
+                if (filled == length) {
+                    status = FULL;
+                    score = num * length;
+                } else if (filled == 0) {
+                    status = EMPTY;
+                    score = 10 * length;
+                } else {
+                    status = PARTIAL;
+                    if (num == 0) {
+                        num = 10;
+                    }
+                    score = num * length;
+                }
+            }
+
+            scale = vars[length - filled];
+
+            ret += scale * score;
+
+            if (status != FULL) ret -= scale * (1 - pow(0.993, blockCount)) * score;
+
+            if (blockCount < 10) {
+                if (status == PARTIAL) {
+                    if (num == lastNum && num != 0 && num != 10) {
+                        ret -= lastScore * vars[7];
+                        ret -= sqrt(lastNum / 2);
+                    }
+                    lastNum = num;
+                    lastScore = score;
+                } else {
+                    lastNum = 0;
+                    lastScore = 0;
+                }
+                if (status == BROKEN) {
+                    ret -= sqrt(num);
+                }
+            }
+            if (num != 0 && num != 10 && status == PARTIAL) {
+                desired[num] += length - filled;
+                waiting[num] += scale * score;
+            }
+            if (status == PARTIAL) {
+                for (int k = 0; k < length; k++) {
+                    decide[LINES[i][j][k]][0] += 1;
+                    decide[LINES[i][j][k]][1] += scale * score;
+                }
+            }
+            if (num != 0 && num != 10) {
+                needs[num]++;
+            }
+        }
+    }
+    for (int i = 1; i <= 9; i++) {
+        if (!(desired[i] < 5 || needs[i] < 3)) {
+            ret -= pow(desired[i] * vars[6] / 10, 2) * waiting[i];
+        }
+    }
+    scale = pow(blockCount / 20, 2);
+    times = 0.4;
+    for (int i = 0; i < 20; i++) {
+        if (cardList[i][0] == 10) {
+            times = 1;
+            break;
+        }
+    }
+    scale *= times;
+    for (int i = 0; i < 20; i++) {
+        if (abs(decide[i][0] - 2 < 1e-3)) {
+            ret -= scale * vars[8] * decide[i][1];
+        } else if (abs(decide[i][0] - 3 < 1e-3)) {
+            ret -= scale * vars[9] * decide[i][1];
+        }
+    }
+    return ret;
+}
+
+static int simpleGetAction(const int cardList[20][3], const int card[3], const double *vars)
+{
+    int mCardList[20][3];
+    int act = -1;
+    double score = 0;
+    double tmp;
+    for (int i = 0; i < 20; i++) {
+        if (cardList[i][0] == 0) {
+            memcpy(mCardList, cardList, 60 * sizeof(int));
+            memcpy(mCardList[i], card, 3 * sizeof(int));
+            tmp = getExpScore(mCardList, vars);
+            if (tmp > score) {
+                act = i;
+                score = tmp;
+            }
+        }
+    }
+    return act;
+}
+
+static void getNextCard(int restCnt, int wildCnt, const int vis[27], int nextCard[3])
+{
+    int n = 20 - restCnt;
+    if (wildCnt == 0) {
+        if (rand() % (n * n - 91 * n + 1540) < (90 - 2 * n)) {
+            nextCard[0] = 10;
+            nextCard[1] = 10;
+            nextCard[2] = 10;
+            return;
+        }
+    } else if (wildCnt == 1) {
+        if (rand() % (46 - n) < 1) {
+            nextCard[0] = 10;
+            nextCard[1] = 10;
+            nextCard[2] = 10;
+            return;
+        }
+    };
+    int val[54] = {0}, top = 0;
+    for (int i = 0; i < 27; i++) {
+        for (int k = vis[i]; k < 2; k++) {
+            val[top++] = i;
+        }
+    }
+    int v = val[rand() % top];
+    nextCard[0] = NUM[0][v / 9];
+    nextCard[1] = NUM[1][v / 3 % 3];
+    nextCard[2] = NUM[2][v % 3];
+}
+
+static int getActionScoreOnce(const int cardList[20][3], const int card[3], int action, const double *vars)
+{
+    int mCardList[20][3], nextCard[3];
+    memcpy(mCardList, cardList, 60 * sizeof(int));
+    memcpy(mCardList[action], card, 3 * sizeof(int));
+    int vis[27] = {0};
+    int restCnt = 0, wildCnt = 0;
+    for (int i = 0; i < 20; i++) {
+        if (mCardList[i][0] == 0) {
+            restCnt++;
+        } else if (mCardList[i][0] == 10) {
+            wildCnt++;
+        } else {
+            vis[(mCardList[i][0] - 1) / 3 * 9 + (mCardList[i][1] - 1) / 3 * 3 + (mCardList[i][2] - 1) / 3]++;
+        }
+    }
+    while (restCnt) {
+        getNextCard(restCnt, wildCnt, vis, nextCard);
+        restCnt--;
+        if (nextCard[0] == 10) {
+            wildCnt++;
+        } else {
+            vis[(nextCard[0] - 1) / 3 * 9 + (nextCard[1] - 1) / 3 * 3 + (nextCard[2] - 1) / 3]++;
+        }
+        action = simpleGetAction(mCardList, nextCard, vars);
+        memcpy(mCardList[action], nextCard, 3 * sizeof(int));
+    }
+
+    return getScore(mCardList);
+}
+
+typedef struct __ExpContext {
+    std::atomic_int64_t scoreSum[20];
+    std::atomic_int32_t scoreCnt[20];
+
+    const int (*cardList)[3];
+    const int *card;
+    const double *vars;
+
+    int mode;  // 0 is count, 1 is time;
+    std::atomic_int cursor;
+    int cnt;
+    time_t startTime;
+    int second;
+} ExpContext;
+
+static void *getExpScoreThread(void *arg)
+{
+    ExpContext *context = (ExpContext *)arg;
+    int score;
+    while (1) {
+        if (context->mode == 0) {
+            int now = context->cursor++;
+            if (now >= context->cnt) {
+                break;
+            }
+        } else {
+            if (time(0) - context->startTime > context->second) {
+                break;
+            }
+        }
+        for (int i = 0; i < 20; i++) {
+            if (context->cardList[i][0] == 0) {
+                score = getActionScoreOnce(context->cardList, context->card, i, context->vars);
+                context->scoreCnt[i]++;
+                context->scoreSum[i] += score;
+            }
+        }
+    }
+    return 0;
+}
+
+int getActionByCount(const int cardList[20][3], const int card[3], const double *vars, double expScores[20],
+                     int tryCount, int tryThread)
+{
+    ExpContext context;
+    memset(&context, 0, sizeof(context));
+    context.cardList = cardList;
+    context.card = card;
+    context.vars = vars;
+    context.mode = 0;
+    context.cnt = tryCount;
+    context.cursor = 0;
+    if (tryThread == 1) {
+        getExpScoreThread(&context);
+    } else {
+        std::vector<std::thread> threads;
+        for (int i = 0; i < tryThread; i++) {
+            threads.emplace_back(std::thread(getExpScoreThread, &context));
+        }
+        for (int i = 0; i < tryThread; i++) {
+            threads[i].join();
+        }
+    }
+
+    int act = -1;
+    double score = 0;
+    for (int i = 0; i < 20; i++) {
+        if (cardList[i][0] == 0) {
+            expScores[i] = 1.0 * context.scoreSum[i] / context.scoreCnt[i];
+            if (expScores[i] > score) {
+                act = i;
+                score = expScores[i];
+            }
+        }
+    }
+    return act;
+}
+
+int getActionByTime(const int cardList[20][3], const int card[3], const double *vars, double expScores[20], int trySecond,
+                    int tryThread)
+{
+    ExpContext context;
+    memset(&context, 0, sizeof(context));
+    context.cardList = cardList;
+    context.card = card;
+    context.vars = vars;
+    context.mode = 1;
+    context.startTime = time(0);
+    context.second = trySecond;
+    if (tryThread == 1) {
+        getExpScoreThread(&context);
+    } else {
+        std::vector<std::thread> threads;
+        for (int i = 0; i < tryThread; i++) {
+            threads.emplace_back(std::thread(getExpScoreThread, &context));
+        }
+        for (int i = 0; i < tryThread; i++) {
+            threads[i].join();
+        }
+    }
+
+    int act = -1;
+    double score = 0;
+    for (int i = 0; i < 20; i++) {
+        if (cardList[i][0] == 0) {
+            expScores[i] = 1.0 * context.scoreSum[i] / context.scoreCnt[i];
+            if (expScores[i] > score) {
+                act = i;
+                score = expScores[i];
+            }
+        }
+    }
+    return act;
 }

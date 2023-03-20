@@ -15,6 +15,7 @@ int main(int argc, char* argv[])
     if (argc >= 3) {
         threadCnt = atoi(argv[2]);
     }
+    cout << seed << endl;
     getCardList(cardList, seed);
     for (int i = 0; i < 20; i++) {
         for (int j = 0; j < 3; j++) {
@@ -22,11 +23,5 @@ int main(int argc, char* argv[])
         }
         cout << endl;
     }
-    int score = getMaxScore(cardList, perm, 0, threadCnt);
-    cout << score << endl;
-    for (int i = 0; i < 20; i++) {
-        cout << perm[i] << ' ';
-    }
-    cout << endl;
     return 0;
 }

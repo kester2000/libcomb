@@ -32,7 +32,7 @@ void findThread()
             cursor += piece;
         }
         for (ll seed = tmpSeed; seed < tmpSeed + piece; seed++) {
-            sprintf(buf, "%lld", seed);
+            sprintf(buf, "1145140%lld", seed);
             getCardList(cardList, buf);
             int sum = 0;
             int cnt = 0;
