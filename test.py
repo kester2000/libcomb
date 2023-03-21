@@ -14,7 +14,7 @@ card = (c_int*3)()
 #                      0.069, 0.0312, 0.75, 0.03, 0.08465, 0.08164, 18)
 exp = (c_double*20)()
 
-n = input("n:")
+n = int(input("n:"))
 for j in range(n):
     inp = input("enter num:").split(' ')
     for i in range(3):
@@ -29,9 +29,14 @@ for j in range(n, 20):
         card[i] = int(inp[i])
     for i in range(20):
         exp[i] = -1
-    comb.getActionByTime(borad, card, 0, exp, 30, 12)
+    act = comb.getActionByTime(borad, card, 0, exp, 5, 12)
     k = sorted(enumerate(exp), key=lambda x: x[1], reverse=True)
+    if j >= 5 and k[0][1]-k[1][1] < 2:
+        print('run 30s')
+        act = comb.getActionByTime(borad, card, 0, exp, 30, 12)
+        k = sorted(enumerate(exp), key=lambda x: x[1], reverse=True)
     print(*k[:5], sep='\n')
-    act = int(input("where to place:"))
+    # act = int(input("where to place:"))
+    print(f'act {act}')
     for i in range(3):
         borad[act*3+i] = card[i]
