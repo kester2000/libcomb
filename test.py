@@ -22,11 +22,17 @@ for j in range(n):
     act = int(input("where to place:"))
     for i in range(3):
         borad[act*3+i] = card[i]
-
+print('enter finish')
 for j in range(n, 20):
-    inp = input("enter num:").split(' ')
-    for i in range(3):
-        card[i] = int(inp[i])
+    cin = True
+    while (cin):
+        try:
+            inp = input("enter num:").split(' ')
+            for i in range(3):
+                card[i] = int(inp[i])
+            cin = False
+        except:
+            pass
     for i in range(20):
         exp[i] = -1
     act = comb.getActionByTime(borad, card, 0, exp, 5, 12)
@@ -36,7 +42,13 @@ for j in range(n, 20):
         act = comb.getActionByTime(borad, card, 0, exp, 30, 12)
         k = sorted(enumerate(exp), key=lambda x: x[1], reverse=True)
     print(*k[:5], sep='\n')
-    # act = int(input("where to place:"))
+    cin = True
+    while (cin):
+        try:
+            act = int(input("where to place:"))
+            cin = False
+        except:
+            pass
     print(f'act {act}')
     for i in range(3):
         borad[act*3+i] = card[i]
