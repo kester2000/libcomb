@@ -468,8 +468,10 @@ double getExpScore(const int cardList[20][3], const double *vars)
             }
             if (status == PARTIAL) {
                 for (int k = 0; k < length; k++) {
-                    decide[LINES[i][j][k]][0] += 1;
-                    decide[LINES[i][j][k]][1] += scale * score;
+                    if (cardList[LINES[i][j][k]][0] == 0) {
+                        decide[LINES[i][j][k]][0] += 1;
+                        decide[LINES[i][j][k]][1] += scale * score;
+                    }
                 }
             }
             if (num != 0 && num != 10) {
@@ -501,7 +503,7 @@ double getExpScore(const int cardList[20][3], const double *vars)
     return ret;
 }
 
-static int simpleGetAction(const int cardList[20][3], const int card[3], const double *vars)
+int getSimpleAction(const int cardList[20][3], const int card[3], const double *vars)
 {
     int mCardList[20][3];
     int act = -1;
@@ -575,7 +577,7 @@ static int getActionScoreOnce(const int cardList[20][3], const int card[3], int 
         } else {
             vis[(nextCard[0] - 1) / 3 * 9 + (nextCard[1] - 1) / 3 * 3 + (nextCard[2] - 1) / 3]++;
         }
-        action = simpleGetAction(mCardList, nextCard, vars);
+        action = getSimpleAction(mCardList, nextCard, vars);
         memcpy(mCardList[action], nextCard, 3 * sizeof(int));
     }
 
@@ -660,8 +662,8 @@ int getActionByCount(const int cardList[20][3], const int card[3], const double 
     return act;
 }
 
-int getActionByTime(const int cardList[20][3], const int card[3], const double *vars, double expScores[20], int trySecond,
-                    int tryThread)
+int getActionByTime(const int cardList[20][3], const int card[3], const double *vars, double expScores[20],
+                    int trySecond, int tryThread)
 {
     ExpContext context;
     memset(&context, 0, sizeof(context));
