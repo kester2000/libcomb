@@ -1,6 +1,7 @@
 #include <cstring>
 #include <iostream>
 #include <string>
+#include <ctime>
 
 #include "comb/comb.h"
 using namespace std;
@@ -10,8 +11,9 @@ int main(int argc, char* argv[])
     int cardList[20][3], board[20][3];
     long long sum = 0;
     int cnt = 0;
+    string tt = to_string(time(0));
     for (int i = 0; i < 10000; i++) {
-        string s = "879721" + to_string(i);
+        string s = tt + to_string(i);
         getCardList(cardList, s.c_str());
         memset(board, 0, 60 * sizeof(int));
         for (int j = 0; j < 20; j++) {
