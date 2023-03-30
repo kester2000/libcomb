@@ -457,7 +457,7 @@ double getExpScore(const int cardList[20][3], const double *vars)
                 if (status == PARTIAL) {
                     if (num == lastNum && num != 0 && num != 10) {
                         ret -= lastScore * vars[7];
-                        ret -= sqrt(lastNum / 2);
+                        ret -= sqrt(lastNum / 2.0);
                     }
                     lastNum = num;
                     lastScore = score;
